@@ -1,0 +1,52 @@
+var express = require('express');
+var app = express();
+var server = require('http').createServer(app);
+var io = require('socket.io')(server, {
+    cors: { origin: "*" }
+});
+var users = [];
+var connections = [];
+
+// Menjalankan server pada port 3000
+server.listen(process.env.PORT || 3000);
+console.log('Server running on port 3000');
+
+// Route untuk mengirim file HTML ke klien
+app.get('/', function(req, res){
+    res.sendFile(__dirname + '/index.html');
+});
+
+// Event listener utama ketika client terhubung ke socket
+io.sockets.on('connection', function(socket){
+    connections.push(socket);
+    console.log('Connected: %s sockets connected', connections.length);
+
+    // Event ketika klien terputus
+    socket.on('disconnect', function(data){
+        // Menghapus user dari daftar jika mereka sudah login
+        if(!socket.username) return;
+        users.splice(users.indexOf(socket.username), 1);
+        updateUsernames(); // Update UI user online
+        
+        // Hapus koneksi dari array
+        connections.splice(connections.indexOf(socket), 1);
+        console.log('Disconnected: %s sockets connected', connections.length);
+    });
+
+    // Event untuk mengirim pesan ke semua klien
+    socket.on('send message', function(data){
+        io.sockets.emit('new message', {msg: data, user: socket.username});
+    });
+
+    // Event saat user baru mendaftar nama
+    socket.on('new user', function(data, callback){
+        callback(true);
+        socket.username = data;
+        users.push(socket.username);
+        updateUsernames();
+    });
+
+    function updateUsernames(){
+        io.sockets.emit('get users', users);
+    }
+});
